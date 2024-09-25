@@ -123,7 +123,7 @@ if file is not None:
         #Schedule
         inputs.to_excel(writer, sheet_name='Schedule')
         #Total Dataframe
-        df.to_excel(writer, sheet_name='total_details')
+        df.to_excel(writer, sheet_name='Forecast_by_well')
         reserve_summary.to_excel(writer, sheet_name='Reserve_Summary')
         resource_summary.to_excel(writer, sheet_name='Resource_Summary')
     
