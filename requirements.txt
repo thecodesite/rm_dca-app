@@ -1,5 +1,3 @@
 pandas
 openpyxl
 streamlit
-xlsxwriter
-bytesio
