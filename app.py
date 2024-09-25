@@ -116,7 +116,7 @@ if file is not None:
     # -----------------------------------------
     # Botón para exportar resultados
     # Create a BytesIO buffer
-    #output = BytesIO()
+    output = BytesIO()
     #with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         # use to_excel function and specify the sheet_name and index 
         # to store the dataframe in specified sheet
