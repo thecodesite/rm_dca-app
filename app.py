@@ -117,17 +117,17 @@ if file is not None:
     # create a excel writer object
     #with pd.ExcelWriter(path+'\\'+project_name+'_'+datetime.now().strftime("%d%m%Y-%H%M%S")+'.xlsx') as writer:
     #with pd.ExcelWriter(r"C:\Users\R115127\OneDrive - Repsol\dev\res_calc\output_data"+'\\'+'reserve_results_'+datetime.now().strftime("%d%m%Y-%H%M%S")+'.xlsx', engine='openpyxl') as writer:
-    with pd.ExcelWriter('reserve_results_'+datetime.now().strftime("%d%m%Y-%H%M%S")+'.xlsx') as writer:
-       
-        # use to_excel function and specify the sheet_name and index 
-        # to store the dataframe in specified sheet
-        #Schedule
-        inputs.to_excel(writer, sheet_name='Schedule')
-        #Total Dataframe
-        df.to_excel(writer, sheet_name='forecast_by_well')
-        # R&R Summary
-        reserve_summary.to_excel(writer, sheet_name='Reserve_Summary')
-        resource_summary.to_excel(writer, sheet_name='Resource_Summary')
-        #Total Dataframe
-        #df.to_excel(writer, sheet_name='forecast_by_well')
-    writer.to_csv()
+        with pd.ExcelWriter('reserve_results_'+datetime.now().strftime("%d%m%Y-%H%M%S")+'.xlsx') as writer:
+           
+            # use to_excel function and specify the sheet_name and index 
+            # to store the dataframe in specified sheet
+            #Schedule
+            inputs.to_excel(writer, sheet_name='Schedule')
+            #Total Dataframe
+            df.to_excel(writer, sheet_name='forecast_by_well')
+            # R&R Summary
+            reserve_summary.to_excel(writer, sheet_name='Reserve_Summary')
+            resource_summary.to_excel(writer, sheet_name='Resource_Summary')
+            #Total Dataframe
+            #df.to_excel(writer, sheet_name='forecast_by_well')
+        writer.to_csv()
