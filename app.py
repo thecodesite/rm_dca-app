@@ -128,9 +128,9 @@ if file is not None:
         resource_summary.to_excel(writer, sheet_name='Resource_Summary')
     
     # Get the in-memory string
-    #excel_data = output.getvalue()
-    #st.download_button(
-    #    label="Download Results",
-    #    data=excel_data,
-    #   file_name="resulsts.xlsx",
-    #)
+    excel_data = output.getvalue()
+    st.download_button(
+        label="Download Results",
+        data=excel_data,
+       file_name="resulsts.xlsx",
+    )
