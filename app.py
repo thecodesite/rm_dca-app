@@ -126,8 +126,6 @@ if file is not None:
         df.to_excel(writer, sheet_name='total_details')
         reserve_summary.to_excel(writer, sheet_name='Reserve_Summary')
         resource_summary.to_excel(writer, sheet_name='Resource_Summary')
-        #Total Dataframe
-        df.to_excel(writer, sheet_name='total_details')
     
     # Get the in-memory string
     excel_data = output.getvalue()
