@@ -117,15 +117,15 @@ if file is not None:
     # Botón para exportar resultados
     # Create a BytesIO buffer
     output = BytesIO()
-    #with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         # use to_excel function and specify the sheet_name and index 
         # to store the dataframe in specified sheet
         #Schedule
-        #inputs.to_excel(writer, sheet_name='Schedule')
+        inputs.to_excel(writer, sheet_name='Schedule')
         #Total Dataframe
-        #df.to_excel(writer, sheet_name='total_details')
-        #reserve_summary.to_excel(writer, sheet_name='Reserve_Summary')
-        #resource_summary.to_excel(writer, sheet_name='Resource_Summary')
+        df.to_excel(writer, sheet_name='total_details')
+        reserve_summary.to_excel(writer, sheet_name='Reserve_Summary')
+        resource_summary.to_excel(writer, sheet_name='Resource_Summary')
     
     # Get the in-memory string
     #excel_data = output.getvalue()
