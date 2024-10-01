@@ -62,14 +62,14 @@ if file is not None:
     # Set Project Start Date
     proj_start_date = st.date_input(
         "Choose Project Start Date:",
-        datetime.now()
+        min(inputs['Start Date']) + pd.DateOffset(years=1)
     )
     proj_start_date = proj_start_date.strftime("%Y-%m-%d")
     
     # Set End Forecast Date
     forecast_end_date = st.date_input(
         "Choose End Forecast Date:",
-        datetime.now()
+        min(inputs['Start Date']) + pd.DateOffset(years=20)
     )
     forecast_end_date = forecast_end_date.strftime("%Y-%m-%d")
     
