@@ -13,7 +13,7 @@ from io import BytesIO
 from datetime import *
 import datetime
 from datetime import datetime
-from functions import dca_project, run_res_scenario, rr_summary
+from functions import dca_project, dca_project_dt, run_res_scenario, run_res_scenario_dt, rr_summary
 
 # Application Name
 st.title("Reserve Calculator")
@@ -47,6 +47,7 @@ if file is not None:
     gor_list = inputs['GOR'].to_list()
     bsw_list = inputs['bsw'].to_list()
     b_list = inputs['b'].to_list()
+    dt_list = inputs['Downtime'].to_list()
     rate_limit = 50
     #td = date(2049,4,17)
     
@@ -80,11 +81,11 @@ if file is not None:
 
     # -----------------------------------------
     # Reserve 1P scenario
-    result_1p= run_res_scenario('1P', qi1p_list, di1p_list, psd_list, well_list, reserve_cat_list, activity_list, di1p_pro_list, project_active_wells, gor_list, bsw_list, forecast_end_date, proj_start_date)
+    result_1p= run_res_scenario_dt('1P', qi1p_list, di1p_list, psd_list, well_list, reserve_cat_list, activity_list, di1p_pro_list, project_active_wells, gor_list, bsw_list, forecast_end_date, proj_start_date, dt_list)
     # Reserve 2P scenario
-    result_2p= run_res_scenario('2P', qi2p_list, di2p_list, psd_list, well_list, reserve_cat_list, activity_list, di2p_pro_list, project_active_wells, gor_list, bsw_list, forecast_end_date, proj_start_date)
+    result_2p= run_res_scenario_dt('2P', qi2p_list, di2p_list, psd_list, well_list, reserve_cat_list, activity_list, di2p_pro_list, project_active_wells, gor_list, bsw_list, forecast_end_date, proj_start_date, dt_list)
     # Reserve 3P scenario
-    result_3p= run_res_scenario('3P', qi3p_list, di3p_list, psd_list, well_list, reserve_cat_list, activity_list, di3p_pro_list, project_active_wells, gor_list, bsw_list, forecast_end_date, proj_start_date)
+    result_3p= run_res_scenario_dt('3P', qi3p_list, di3p_list, psd_list, well_list, reserve_cat_list, activity_list, di3p_pro_list, project_active_wells, gor_list, bsw_list, forecast_end_date, proj_start_date, dt_list)
     # Concatenate reserve scenario
     df = pd.concat([result_1p, result_2p, result_3p], axis=0)
 
@@ -102,7 +103,7 @@ if file is not None:
     
     # Button to run calcs
     if st.button("Run"):
-        # Realizar cálculos
+        # Compute
         st.write(df)
     
     # Button to gnerate Reserve & Resource Summary
@@ -114,7 +115,7 @@ if file is not None:
         st.write(resource_summary)
         
     # -----------------------------------------
-    # Botón para exportar resultados
+    # Buttom to export results
     # Create a BytesIO buffer
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
