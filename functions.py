@@ -106,7 +106,8 @@ def dca_project(qoi, di, prod_start_date, fore_end_date, dip, proj_start_date, p
     water_list = []
     for q in qo_list:
         if q>0:
-            w=qoi+qoi*bsw-q
+            #w=qoi+qoi*bsw-q
+            w=qoi+qoi*(bsw/(1-bsw))-q
         else:
             w=0
         water_list.append(w)
