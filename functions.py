@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Sep 23 10:09:20 2024
-
-@author: R115127
-"""
 import datetime
 from datetime import *
 from datetime import datetime
@@ -286,31 +280,71 @@ def run_res_scenario(reserve_scenario, qi_list, di_list, psd_list, well_list, re
 # run_res_scenario_dt() function includes downtime
 def run_res_scenario_dt(reserve_scenario, qi_list, di_list, psd_list, well_list, reserve_cat_list, activity_list, di_pro_list, project_active_wells, gor_list, bsw_list, forecast_end_date, proj_start_date, dt_list):
     import pandas as pd
-    # Compute 1P reserves 
     df_list = []
-    for qi, di, psd, w, c, a, di_pro, paw, gor, bsw, dt  in zip(qi_list, di_list, psd_list, well_list, reserve_cat_list, activity_list, di_pro_list, project_active_wells, gor_list, bsw_list, dt_list):
-        # Perform dca 1P forecast
-        vars()[w] = dca_project_dt(qi, di, psd, forecast_end_date, di_pro, proj_start_date, paw, gor, bsw, dt)
-        # Reset index
-        vars()[w] = vars()[w].reset_index()
-        # Add new columns
-        vars()[w]['Year'] = vars()[w]['Dates'].dt.year
-        vars()[w]['well_name'] = w
-        vars()[w]['reserve_cat'] = c
-        vars()[w]['activity'] = a
-        # Reorder columns
-        vars()[w] = vars()[w][['Dates','Year', 'well_name', 'reserve_cat','activity', 'Days_prod', 'Cum_days_prod', 'Days_month', 'Uptime',
+    for qi, di, psd, w, c, a, di_pro, paw, gor, bsw, dt in zip(qi_list, di_list, psd_list, well_list, reserve_cat_list, activity_list, di_pro_list, project_active_wells, gor_list, bsw_list, dt_list):
+        try:
+            df_well = dca_project_dt(qi, di, psd, forecast_end_date, di_pro, proj_start_date, paw, gor, bsw, dt)
+            df_well = df_well.reset_index()
+            df_well['Year'] = pd.to_datetime(df_well['Dates']).dt.year
+            df_well['well_name'] = w
+            df_well['reserve_cat'] = c
+            df_well['activity'] = a
+            df_well = df_well[['Dates','Year', 'well_name', 'reserve_cat','activity', 'Days_prod', 'Cum_days_prod', 'Days_month', 'Uptime',
                                'oil_rate','oil_volume', 'oil_cum', 'gor','gas_rate','gas_volume', 'gas_cum', 'bsw', 'water_rate','water_volume', 'water_cum']]
-        vars()[w]['Dates'] = vars()[w]['Dates'].dt.strftime('%Y-%m-%d')
-        # Append dataframes
-        df_list.append(vars()[w])    
-        # Concat list of dataframes
+            df_well['Dates'] = pd.to_datetime(df_well['Dates']).dt.strftime('%Y-%m-%d')
+            df_list.append(df_well)
+        except Exception as e:
+            print(f"Error processing well {w}: {e}")
+            continue
+    if df_list:
         result = pd.concat(df_list).fillna(0)
-    result['Reserve_scenario'] = reserve_scenario
-    
-    # Units K: oil & water, M: Gas
-    #result_1p=result_1p
-    return result
+        result['Reserve_scenario'] = reserve_scenario
+        return result
+    else:
+        return pd.DataFrame()  # Return empty DataFrame if all fail
+
+# --- Update: Support end date by well in run_res_scenario_dt ---    
+def run_res_scenario_dt(
+    reserve_scenario, qi_list, di_list, psd_list, well_list, reserve_cat_list, activity_list,
+    di_pro_list, project_active_wells, gor_list, bsw_list, forecast_end_date, proj_start_date, dt_list, end_date_list=None
+):
+    import pandas as pd
+    df_list = []
+    for idx, (qi, di, psd, w, c, a, di_pro, paw, gor, bsw, dt) in enumerate(
+        zip(qi_list, di_list, psd_list, well_list, reserve_cat_list, activity_list, di_pro_list, project_active_wells, gor_list, bsw_list, dt_list)
+    ):
+        # Use per-well end date if provided, else use global forecast_end_date
+        if end_date_list is not None:
+            well_end_date = end_date_list[idx]
+            # If NaT or NaN, fallback to global
+            if pd.isnull(well_end_date):
+                well_end_date = forecast_end_date
+            # If it's a Timestamp, convert to string
+            if not isinstance(well_end_date, str):
+                well_end_date = str(well_end_date.date())
+        else:
+            well_end_date = forecast_end_date
+        try:
+            df_well = dca_project_dt(qi, di, psd, well_end_date, di_pro, proj_start_date, paw, gor, bsw, dt)
+            df_well = df_well.reset_index()
+            df_well['Year'] = pd.to_datetime(df_well['Dates']).dt.year
+            df_well['well_name'] = w
+            df_well['reserve_cat'] = c
+            df_well['activity'] = a
+            df_well = df_well[['Dates','Year', 'well_name', 'reserve_cat','activity', 'Days_prod', 'Cum_days_prod', 'Days_month', 'Uptime',
+                               'oil_rate','oil_volume', 'oil_cum', 'gor','gas_rate','gas_volume', 'gas_cum', 'bsw', 'water_rate','water_volume', 'water_cum']]
+            df_well['Dates'] = pd.to_datetime(df_well['Dates']).dt.strftime('%Y-%m-%d')
+            df_list.append(df_well)
+        except Exception as e:
+            print(f"Error processing well {w}: {e}")
+            continue
+    if df_list:
+        result = pd.concat(df_list).fillna(0)
+        result['Reserve_scenario'] = reserve_scenario
+        return result
+    else:
+        return pd.DataFrame()  # Return empty DataFrame if all fail
+
 
 def rr_summary(pv_rc_year_1p, pv_rc_year_2p, pv_rc_year_3p):
     # Create reserve summary
