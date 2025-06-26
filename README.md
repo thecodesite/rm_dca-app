@@ -1,7 +1,5 @@
 # Reserve Calculator App
 
-![App Screenshot](screenshot.png) <!-- Add a screenshot if available -->
-
 ## Overview
 A Streamlit web application for calculating oil & gas reserves and resources based on user-uploaded Excel input data. The app processes well data, runs decline curve analysis (DCA) scenarios, and generates summary tables with downloadable results.
 
