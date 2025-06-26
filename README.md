@@ -33,9 +33,9 @@ Your Excel file must include these columns (exact names required):
 | Activity        | Well activity type                   | "Producer"    |
 | Start Date      | Production start date                | 2023-01-01    |
 | End Date        | Production end date (before forecast end date)                  | 2023-01-01    |
-| Di_1p/2p/3p     | Decline rates for each scenario      | 0.15          |
-| Qo_1p/2p/3p     | Initial production rates             | 500           |
-| GOR             | Gas-Oil Ratio                        | 800           |
+| Di_1p/2p/3p     | Decline rates for each scenario (frac.)      | 0.15          |
+| Qo_1p/2p/3p     | Initial production rates (STB/D)             | 500           |
+| GOR             | Gas-Oil Ratio (scf/STB)                        | 800           |
 | bsw             | Basic Sediments & Water (%)          | 20            |
 
 ### Running the App
