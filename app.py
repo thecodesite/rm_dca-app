@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Sep 23 10:16:58 2024
-
-@author: R115127
-"""
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -24,6 +17,12 @@ file = st.file_uploader("Load Input data (MS Excel file)", type=["xlsx"])
 if file is not None:
     # Read excel file
     inputs = pd.read_excel(file)
+    #st.write("Load data:")
+    #st.write(inputs)
+
+    # Fix: Ensure Comments column is string type for Arrow compatibility
+    if 'Comments' in inputs.columns:
+        inputs['Comments'] = inputs['Comments'].astype(str)
     st.write("Load data:")
     st.write(inputs)
        
@@ -74,6 +73,13 @@ if file is not None:
     )
     forecast_end_date = forecast_end_date.strftime("%Y-%m-%d")
     
+    # Set End Date list
+    # If End Date is not provided, use forecast_end_date
+    end_date_list = [
+        str(date.strftime("%Y-%m-%d")) if pd.notnull(date) and hasattr(date, "strftime") else forecast_end_date
+        for date in inputs['End Date'].to_list()
+    ]
+
     # Show choosen dates
     st.write("Start forecast:", start_forecast_date)
     st.write("Project Start Date:", proj_start_date)
@@ -81,23 +87,23 @@ if file is not None:
 
     # -----------------------------------------
     # Reserve 1P scenario
-    result_1p= run_res_scenario_dt('1P', qi1p_list, di1p_list, psd_list, well_list, reserve_cat_list, activity_list, di1p_pro_list, project_active_wells, gor_list, bsw_list, forecast_end_date, proj_start_date, dt_list)
+    result_1p= run_res_scenario_dt('1P', qi1p_list, di1p_list, psd_list, well_list, reserve_cat_list, activity_list, di1p_pro_list, project_active_wells, gor_list, bsw_list, forecast_end_date, proj_start_date, dt_list, end_date_list)
     # Reserve 2P scenario
-    result_2p= run_res_scenario_dt('2P', qi2p_list, di2p_list, psd_list, well_list, reserve_cat_list, activity_list, di2p_pro_list, project_active_wells, gor_list, bsw_list, forecast_end_date, proj_start_date, dt_list)
+    result_2p= run_res_scenario_dt('2P', qi2p_list, di2p_list, psd_list, well_list, reserve_cat_list, activity_list, di2p_pro_list, project_active_wells, gor_list, bsw_list, forecast_end_date, proj_start_date, dt_list, end_date_list)
     # Reserve 3P scenario
-    result_3p= run_res_scenario_dt('3P', qi3p_list, di3p_list, psd_list, well_list, reserve_cat_list, activity_list, di3p_pro_list, project_active_wells, gor_list, bsw_list, forecast_end_date, proj_start_date, dt_list)
+    result_3p= run_res_scenario_dt('3P', qi3p_list, di3p_list, psd_list, well_list, reserve_cat_list, activity_list, di3p_pro_list, project_active_wells, gor_list, bsw_list, forecast_end_date, proj_start_date, dt_list, end_date_list)
     # Concatenate reserve scenario
     df = pd.concat([result_1p, result_2p, result_3p], axis=0)
 
     # Pivot table 1P scenario
     pv_rc_year_1p=pd.pivot_table(result_1p, values=['oil_volume'], index=['reserve_cat'],
-                   columns=['Year'], aggfunc="sum")
+                   columns=['Year'], aggfunc="sum", sort=False)
     # Pivot table 2P scenario
     pv_rc_year_2p=pd.pivot_table(result_2p, values=['oil_volume'], index=['reserve_cat'],
-                   columns=['Year'], aggfunc="sum")
+                   columns=['Year'], aggfunc="sum", sort=False)
     # Pivot table 3P scenario
     pv_rc_year_3p=pd.pivot_table(result_3p, values=['oil_volume'], index=['reserve_cat'],
-                   columns=['Year'], aggfunc="sum")
+                   columns=['Year'], aggfunc="sum", sort=False)
     # Reserve & Resource Summary
     reserve_summary, resource_summary = rr_summary(pv_rc_year_1p, pv_rc_year_2p, pv_rc_year_3p)
     
