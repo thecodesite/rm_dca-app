@@ -2,4 +2,5 @@ pandas
 openpyxl
 streamlit
 xlsxwriter
+streamlit>=1.36
 altair==6.0.0
