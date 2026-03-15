@@ -6,127 +6,15 @@ from datetime import date
 import numpy as np
 import pandas as pd
 
-def dca_project(qoi, di, prod_start_date, fore_end_date, dip, proj_start_date, project_active_well, gor, bsw):
-    '''import calendar
-    from datetime import *'''
-    #Inputs
-    prod_start_date = datetime.strptime(prod_start_date, "%Y-%m-%d")
-    proj_start_date = datetime.strptime(proj_start_date, "%Y-%m-%d")
-    forecast_end_date = datetime.strptime(fore_end_date, "%Y-%m-%d")
-    
-    #Generate range dates list
-    forecast_start_date = prod_start_date.replace(day=1)
-    date1 = forecast_start_date
-    date2 = forecast_end_date
-    
-    #create list to store dates
-    range_dates_list = [] 
-    
-    # Loop
-    while date1 < date2:
-        month = date1.month
-        year  = date1.year
-        day  = date1.day
-        # Append forecast start date
-        range_dates_list.append(date1)
-        # Generate range dates
-        next_month = month + 1 if month != 12 else 1
-        next_year = year + 1 if next_month == 1 else year
-        next_day = 1
-        date1 = date1.replace(month = next_month, year = next_year, day=next_day)
-    
-    # Append forecast end date
-    month = date2.month
-    year  = date2.year
-    day  = date2.day
-    range_dates_list.append(date2)
-    # Print list
-    range_dates_list
-    
-    # Compute effective production days per well
-    # Create empty list to store prod. days
-    days_prod=[]
-    #Compute first days prod
-    non_effective_prod_days=prod_start_date-forecast_start_date
-    first_days_prod=range_dates_list[1]-range_dates_list[0]-non_effective_prod_days
-    rest_of_days_prod = [range_dates_list[i+2]-range_dates_list[i+1] for i in range(len(range_dates_list)-2)]
-    days_prod=np.append(first_days_prod,rest_of_days_prod).tolist()
-    
-    #Calculate total days available per month in order to compute Update time
-    days_month=[range_dates_list[i+1]-range_dates_list[i] for i in range(len(range_dates_list)-1)]
-       
-    # Create dataframe
-    df=pd.DataFrame()
-    df['Dates']=pd.Series(range_dates_list)
-    df['Days_prod']=pd.Series(days_prod).dt.days
-    df['Cum_days_prod']=pd.Series(days_prod).dt.days.cumsum().shift().fillna(0)
-    df['Days_month']=pd.Series(days_month).dt.days
-    df['Uptime']=(df['Days_prod']/df['Days_month']).fillna(0)   
-    
-    # Compute oil rate (qo)   
-    project_active_well = project_active_well
-    qo_list = []
-    if project_active_well == True:
-        for x, y, z in zip(df['Cum_days_prod'].to_list(), df['Uptime'].to_list(), range_dates_list):
-            if z <= proj_start_date:
-                q1 =qoi*np.exp((-di/365)*x)
-                if q1 >= 50:
-                    qo_list.append(q1)
-                else:
-                    qo_list.append(0)
-            else:
-                qoi_=q1
-                #print((z-proj_start_date))
-                #print(z)
-                q2 =qoi_*np.exp((-dip/365)*(z-proj_start_date).days)
-                if q2 >= 50:
-                    qo_list.append(q2)
-                else:
-                    qo_list.append(0)
-    if project_active_well == False:
-        for x, y, z in zip(df['Cum_days_prod'].to_list(), df['Uptime'].to_list(), range_dates_list):
-            q1 =qoi*np.exp((-di/365)*x)
-            if q1 >= 50:
-                qo_list.append(q1)
-            else:
-                qo_list.append(0)
-    
-    # Rates Oil, Gas, Water
-    #Oil
-    df['oil_rate']=pd.Series(qo_list)*df['Uptime'].to_list()
-    #Gas
-    df['gas_rate']=df['oil_rate']*gor/1000
-    #Water
-    water_list = []
-    for q in qo_list:
-        if q>0:
-            #w=qoi+qoi*bsw-q
-            w=qoi+qoi*(bsw/(1-bsw))-q
-        else:
-            w=0
-        water_list.append(w)
-    df['water_rate']=pd.Series(water_list)
-    #Liquid
-    df['liquid_rate']=df['oil_rate']+df['water_rate']
-    
-    # GOR, Bsw
-    df['gor']=gor
-    df['bsw']=bsw
 
-    # Volumes/Cum Oil, Gas, Water
-    #Oil
-    df['oil_volume']=(df['oil_rate']*df['Days_month']).fillna(0)
-    df['oil_cum']=(df['oil_rate']*df['Days_month']).cumsum().shift().fillna(0)
-    # Gas
-    df['gas_volume']=(df['gas_rate']*df['Days_month']).fillna(0)
-    df['gas_cum']=(df['gas_rate']*df['Days_month']).cumsum().shift().fillna(0)
-    # Water
-    df['water_volume']=(df['water_rate']*df['Days_month']).fillna(0)
-    df['water_cum']=(df['water_rate']*df['Days_month']).cumsum().shift().fillna(0)
-    
-    return df
 # dca_project_dt() function includes downtime
-def dca_project_dt(qoi, di, prod_start_date, fore_end_date, dip, proj_start_date, project_active_well, gor, bsw, dt):
+# Added support for a third water computation method based on an exponential water-cut:
+#   WCT = a * exp(b * Np)
+# where Np is cumulative oil production (volume), including historical cumulative oil.
+# The resulting water rate is computed as:
+#   water_rate = oil_rate * (WCT / (1 - WCT))
+# (with WCT capped to [0, 0.999999] to avoid division by zero).
+def dca_project_dt(qoi, di, prod_start_date, fore_end_date, dip, proj_start_date, project_active_well, gor, wcut, dt, water_mode='liquid_rate', wct_a=None, wct_b=None, historical_oil_cum=0):
     '''import calendar
     from datetime import *'''
     #Inputs
@@ -213,105 +101,84 @@ def dca_project_dt(qoi, di, prod_start_date, fore_end_date, dip, proj_start_date
     
     # Rates Oil, Gas, Water
     #Oil
-    #df['oil_rate']=pd.Series(qo_list)*df['Uptime'].to_list()
-    #df['oil_rate']=pd.Series(qo_list)*df['Uptime'].to_list()*(1-dt)
     df['oil_rate']=pd.Series(qo_list)*df['Uptime'].to_list()
     #Gas
     df['gas_rate']=df['oil_rate']*gor/1000
-    #Water
-    water_list = []
-    for q in qo_list:
-        if q>0:
-            #w=qoi+qoi*bsw-q
-            w=qoi+qoi*(bsw/(1-bsw))-q
-        else:
-            w=0
-        water_list.append(w)
-    df['water_rate']=pd.Series(water_list)
+
+    # Volumes/Cum Oil, Gas (needed for exponential water cut calculation)
+    df['oil_volume']=(df['oil_rate']*df['Days_month']).fillna(0)
+    df['oil_cum']=(df['oil_rate']*df['Days_month']).cumsum().shift().fillna(0)
+    df['gas_volume']=(df['gas_rate']*df['Days_month']).fillna(0)
+    df['gas_cum']=(df['gas_rate']*df['Days_month']).cumsum().shift().fillna(0)
+
+    # Water
+    # Three supported water computation modes:
+    # - 'liquid_rate' (default): keep existing behaviour (based on initial qoi balance)
+    # - 'constant_wc': compute water rate as oil_rate * (wcut / (1 - wcut)) (constant water cut)
+    # - 'wcut_exp': compute water rate using an exponential water-cut curve WCT = a * exp(b * Np)
+    #     where Np is cumulative oil production (historical + future oil_cum)
+
+    if water_mode == 'constant_wc':
+        # water rate proportional to oil_rate using water cut (wcut)
+        # wcut is fraction of water in liquids; water_rate = oil_rate * (wcut / (1 - wcut))
+        df['water_rate'] = df['oil_rate'] * (wcut / (1 - wcut))
+        # If oil_rate is zero (or negative), ensure water_rate is zero
+        df.loc[df['oil_rate'] <= 0, 'water_rate'] = 0
+    elif water_mode == 'wcut_exp':
+        # Ensure parameters are set
+        if wct_a is None:
+            wct_a = wcut
+        if wct_b is None:
+            wct_b = 0
+
+        # Compute water cut (WCT) using exponential curve based on cumulative oil (Np = historical + future)
+        # Cap WCT in [0, 0.999999] to avoid division by zero
+        wct_dynamic = wct_a * np.exp(wct_b * (historical_oil_cum + df['oil_cum']))
+        wct_dynamic = np.clip(wct_dynamic, 0, 0.999999)
+
+        # Water rate computed from oil rate and the water cut
+        df['water_rate'] = df['oil_rate'] * (wct_dynamic / (1 - wct_dynamic))
+        df.loc[df['oil_rate'] <= 0, 'water_rate'] = 0
+    else:
+        water_list = []
+        for q in qo_list:
+            if q>0:
+                # original behaviour: a balance where initial water + initial oil - current oil
+                w = qoi + qoi * (wcut / (1 - wcut)) - q
+            else:
+                w = 0
+            water_list.append(w)
+        df['water_rate'] = pd.Series(water_list)
+
     #Liquid
     df['liquid_rate']=df['oil_rate']+df['water_rate']
     
-    # GOR, Bsw
+    # GOR, Wcut
     df['gor']=gor
-    df['bsw']=bsw
-
-    # Volumes/Cum Oil, Gas, Water
-    #Oil
-    df['oil_volume']=(df['oil_rate']*df['Days_month']).fillna(0)
-    df['oil_cum']=(df['oil_rate']*df['Days_month']).cumsum().shift().fillna(0)
-    # Gas
-    df['gas_volume']=(df['gas_rate']*df['Days_month']).fillna(0)
-    df['gas_cum']=(df['gas_rate']*df['Days_month']).cumsum().shift().fillna(0)
-    # Water
+    if water_mode == 'wcut_exp':
+        df['wcut'] = wct_dynamic
+    else:
+        df['wcut'] = wcut
+    
+    # Water Volumes/Cum Water
     df['water_volume']=(df['water_rate']*df['Days_month']).fillna(0)
     df['water_cum']=(df['water_rate']*df['Days_month']).cumsum().shift().fillna(0)
     
+    # Historical cumulative oil + future cumulative oil (used for exponential water cut calculation and for display)
+    df['oil_cum_total'] = historical_oil_cum + df['oil_cum']
+    
     return df
-
-# Create function to perfom calcs
-def run_res_scenario(reserve_scenario, qi_list, di_list, psd_list, well_list, reserve_cat_list, activity_list, di_pro_list, project_active_wells, gor_list, bsw_list, forecast_end_date, proj_start_date):
-    import pandas as pd
-    # Compute 1P reserves 
-    df_list = []
-    for qi, di, psd, w, c, a, di_pro, paw, gor, bsw  in zip(qi_list, di_list, psd_list, well_list, reserve_cat_list, activity_list, di_pro_list, project_active_wells, gor_list, bsw_list):
-        # Perform dca 1P forecast
-        vars()[w] = dca_project(qi, di, psd, forecast_end_date, di_pro, proj_start_date, paw, gor, bsw)
-        # Reset index
-        vars()[w] = vars()[w].reset_index()
-        # Add new columns
-        vars()[w]['Year'] = vars()[w]['Dates'].dt.year
-        vars()[w]['well_name'] = w
-        vars()[w]['reserve_cat'] = c
-        vars()[w]['activity'] = a
-        # Reorder columns
-        vars()[w] = vars()[w][['Dates','Year', 'well_name', 'reserve_cat','activity', 'Days_prod', 'Cum_days_prod', 'Days_month', 'Uptime',
-                               'oil_rate','oil_volume', 'oil_cum', 'gor','gas_rate','gas_volume', 'gas_cum', 'bsw', 'water_rate','water_volume', 'water_cum']]
-        vars()[w]['Dates'] = vars()[w]['Dates'].dt.strftime('%Y-%m-%d')
-        # Append dataframes
-        df_list.append(vars()[w])    
-        # Concat list of dataframes
-        result = pd.concat(df_list).fillna(0)
-    result['Reserve_scenario'] = reserve_scenario
-    
-    # Units K: oil & water, M: Gas
-    #result_1p=result_1p
-    return result
-    
-# run_res_scenario_dt() function includes downtime
-def run_res_scenario_dt(reserve_scenario, qi_list, di_list, psd_list, well_list, reserve_cat_list, activity_list, di_pro_list, project_active_wells, gor_list, bsw_list, forecast_end_date, proj_start_date, dt_list):
-    import pandas as pd
-    df_list = []
-    for qi, di, psd, w, c, a, di_pro, paw, gor, bsw, dt in zip(qi_list, di_list, psd_list, well_list, reserve_cat_list, activity_list, di_pro_list, project_active_wells, gor_list, bsw_list, dt_list):
-        try:
-            df_well = dca_project_dt(qi, di, psd, forecast_end_date, di_pro, proj_start_date, paw, gor, bsw, dt)
-            df_well = df_well.reset_index()
-            df_well['Year'] = pd.to_datetime(df_well['Dates']).dt.year
-            df_well['well_name'] = w
-            df_well['reserve_cat'] = c
-            df_well['activity'] = a
-            df_well = df_well[['Dates','Year', 'well_name', 'reserve_cat','activity', 'Days_prod', 'Cum_days_prod', 'Days_month', 'Uptime',
-                               'oil_rate','oil_volume', 'oil_cum', 'gor','gas_rate','gas_volume', 'gas_cum', 'bsw', 'water_rate','water_volume', 'water_cum']]
-            df_well['Dates'] = pd.to_datetime(df_well['Dates']).dt.strftime('%Y-%m-%d')
-            df_list.append(df_well)
-        except Exception as e:
-            print(f"Error processing well {w}: {e}")
-            continue
-    if df_list:
-        result = pd.concat(df_list).fillna(0)
-        result['Reserve_scenario'] = reserve_scenario
-        return result
-    else:
-        return pd.DataFrame()  # Return empty DataFrame if all fail
-
+  
 # --- Update: Support end date by well in run_res_scenario_dt ---    
 def run_res_scenario_dt(
     reserve_scenario, qi_list, di_list, psd_list, well_list, reserve_cat_list, activity_list,
-    di_pro_list, project_active_wells, gor_list, bsw_list, forecast_end_date, proj_start_date, dt_list, end_date_list=None
+    di_pro_list, project_active_wells, gor_list, wcut_list, forecast_end_date, proj_start_date, dt_list, end_date_list=None,
+    water_mode='liquid_rate', wct_a_list=None, wct_b_list=None, historical_oil_cum_list=None
 ):
     import pandas as pd
     df_list = []
-    for idx, (qi, di, psd, w, c, a, di_pro, paw, gor, bsw, dt) in enumerate(
-        zip(qi_list, di_list, psd_list, well_list, reserve_cat_list, activity_list, di_pro_list, project_active_wells, gor_list, bsw_list, dt_list)
+    for idx, (qi, di, psd, w, c, a, di_pro, paw, gor, wcut, dt) in enumerate(
+        zip(qi_list, di_list, psd_list, well_list, reserve_cat_list, activity_list, di_pro_list, project_active_wells, gor_list, wcut_list, dt_list)
     ):
         # Use per-well end date if provided, else use global forecast_end_date
         if end_date_list is not None:
@@ -324,15 +191,68 @@ def run_res_scenario_dt(
                 well_end_date = str(well_end_date.date())
         else:
             well_end_date = forecast_end_date
+        # Determine per-well project start date (support both a global string or a per-well list)
         try:
-            df_well = dca_project_dt(qi, di, psd, well_end_date, di_pro, proj_start_date, paw, gor, bsw, dt)
+            # Determine per-well project start date (support both a global string or a per-well list)
+            if isinstance(proj_start_date, (list, tuple, pd.Series)):
+                # If element is missing or empty, fall back to the production start date for the well
+                proj_start_candidate = proj_start_date[idx]
+                if pd.isnull(proj_start_candidate) or proj_start_candidate == "":
+                    proj_start_candidate = psd
+            else:
+                proj_start_candidate = proj_start_date
+
+            # Determine water mode for the well (default to 'liquid_rate' if not provided)
+            # Support both a single string or a per-well list/series
+            water_mode_candidate = 'liquid_rate'
+            # If caller provided a variable named 'water_mode' (via kwargs), it will be processed below
+            # NOTE: Backwards-compatible: no change unless caller passes water_mode into this function
+            if 'water_mode' in locals():
+                water_mode_candidate = locals()['water_mode']
+
+            # Determine per-well water_mode (support single string or list)
+            if isinstance(water_mode, (list, tuple, pd.Series)):
+                water_mode_candidate = water_mode[idx]
+                if pd.isnull(water_mode_candidate) or water_mode_candidate == "":
+                    water_mode_candidate = 'liquid_rate'
+            else:
+                water_mode_candidate = water_mode or 'liquid_rate'
+
+            # Determine per-well exponential water cut parameters
+            wct_a_candidate = None
+            wct_b_candidate = None
+            if isinstance(wct_a_list, (list, tuple, pd.Series)):
+                wct_a_candidate = wct_a_list[idx]
+            else:
+                wct_a_candidate = wct_a_list
+            if isinstance(wct_b_list, (list, tuple, pd.Series)):
+                wct_b_candidate = wct_b_list[idx]
+            else:
+                wct_b_candidate = wct_b_list
+
+            # Determine per-well historical oil cumulative
+            historical_oil_cum_candidate = 0
+            if isinstance(historical_oil_cum_list, (list, tuple, pd.Series)):
+                historical_oil_cum_candidate = historical_oil_cum_list[idx]
+                if pd.isnull(historical_oil_cum_candidate):
+                    historical_oil_cum_candidate = 0
+            else:
+                historical_oil_cum_candidate = historical_oil_cum_list or 0
+
+            df_well = dca_project_dt(qi, di, psd, well_end_date, di_pro, proj_start_candidate, paw, gor, wcut, dt,
+                                     water_mode=water_mode_candidate, wct_a=wct_a_candidate, wct_b=wct_b_candidate, historical_oil_cum=historical_oil_cum_candidate)
             df_well = df_well.reset_index()
             df_well['Year'] = pd.to_datetime(df_well['Dates']).dt.year
             df_well['well_name'] = w
             df_well['reserve_cat'] = c
             df_well['activity'] = a
-            df_well = df_well[['Dates','Year', 'well_name', 'reserve_cat','activity', 'Days_prod', 'Cum_days_prod', 'Days_month', 'Uptime',
-                               'oil_rate','oil_volume', 'oil_cum', 'gor','gas_rate','gas_volume', 'gas_cum', 'bsw', 'water_rate','water_volume', 'water_cum']]
+            df_well = df_well[[
+                'Dates', 'Year', 'well_name', 'reserve_cat', 'activity',
+                'Days_prod', 'Cum_days_prod', 'Days_month', 'Uptime',
+                'oil_rate', 'oil_volume', 'oil_cum', 'oil_cum_total',
+                'gor', 'gas_rate', 'gas_volume', 'gas_cum',
+                'wcut', 'water_rate', 'water_volume', 'water_cum'
+            ]]
             df_well['Dates'] = pd.to_datetime(df_well['Dates']).dt.strftime('%Y-%m-%d')
             df_list.append(df_well)
         except Exception as e:
