@@ -6,7 +6,7 @@ from io import BytesIO
 from datetime import *
 import datetime
 from datetime import datetime
-from functions import dca_project, dca_project_dt, run_res_scenario, run_res_scenario_dt, rr_summary
+from functions import dca_project_dt, run_res_scenario_dt, rr_summary
 
 # Application Name
 st.title("Reserve Calculator")
@@ -28,11 +28,12 @@ if file is not None:
        
     # ------------------------------------------
     
-    # Inputs
+    # Inputs with defaults for missing columns
     well_list = inputs['Well_Name'].to_list()
     reserve_cat_list = inputs['Category'].to_list()
     activity_list = inputs['Activity'].to_list()
     psd_list = [str(date.strftime("%Y-%m-%d")) for date in inputs['Start Date'].to_list()]
+    prosd_list = [str(date.strftime("%Y-%m-%d")) if pd.notnull(date) and hasattr(date, "strftime") else "" for date in inputs['Project Start Date'].to_list()] ## Project Start Date
     di1p_list = inputs['Di_1p'].to_list()
     di2p_list = inputs['Di_2p'].to_list()
     di3p_list = inputs['Di_3p'].to_list()
@@ -44,13 +45,38 @@ if file is not None:
     di3p_pro_list = inputs['Di_3p_pro'].to_list()
     project_active_wells = inputs['Project'].to_list()
     gor_list = inputs['GOR'].to_list()
-    bsw_list = inputs['bsw'].to_list()
+    wcut_list = inputs['wcut'].tolist() if 'wcut' in inputs.columns else (inputs['wcut'].tolist() if 'wcut' in inputs.columns else [0]*len(inputs))
     b_list = inputs['b'].to_list()
     dt_list = inputs['Downtime'].to_list()
+    water_mode_list = inputs['Water_Mode'].tolist() if 'Water_Mode' in inputs.columns else ['wcut_exp']*len(inputs)
+    #st.write("Water Mode List:", water_mode_list)  # Debug: mostrar los modos de agua
+
+    # Allow both 'wct_a'/'wct_b' and legacy 'wcut_a'/'wcut_b' column names.
+    wct_a_raw = inputs['wct_a'] if 'wct_a' in inputs.columns else (inputs['wcut_a'] if 'wcut_a' in inputs.columns else pd.Series([np.nan]*len(inputs)))
+    wct_b_raw = inputs['wct_b'] if 'wct_b' in inputs.columns else (inputs['wcut_b'] if 'wcut_b' in inputs.columns else pd.Series([np.nan]*len(inputs)))
+
+    # Coerce to numeric and validate
+    wct_a_numeric = pd.to_numeric(wct_a_raw, errors='coerce')
+    wct_b_numeric = pd.to_numeric(wct_b_raw, errors='coerce')
+    invalid_mask = wct_a_numeric.isna() | wct_b_numeric.isna()
+    if invalid_mask.any():
+        invalid_wells = [
+            f"{well}: wct_a={wct_a_raw.iloc[i]!r}, wct_b={wct_b_raw.iloc[i]!r}"
+            for i, well in enumerate(well_list)
+            if invalid_mask.iloc[i]
+        ]
+        st.error(
+            "Invalid wct_a/wct_b values detected for the following wells (must be numeric):\n" + "\n".join(invalid_wells)
+        )
+        st.stop()
+
+    wct_a_list = wct_a_numeric.tolist()
+    wct_b_list = wct_b_numeric.tolist()
+
+    historical_oil_cum_list = inputs['Historical_Oil_Cum'].tolist() if 'Historical_Oil_Cum' in inputs.columns else [0]*len(inputs)
     rate_limit = 50
-    #td = date(2049,4,17)
-    
-    # -----------------------------------
+       
+    # ------------------------------------------
     
     # Set start forecast
     start_forecast_date = st.date_input(
@@ -60,12 +86,12 @@ if file is not None:
     start_forecast_date = start_forecast_date.strftime("%Y-%m-%d")
     
     # Set Project Start Date
-    proj_start_date = st.date_input(
-        "Choose Project Start Date:",
-        min(inputs['Start Date']) + pd.DateOffset(years=1)
-    )
-    proj_start_date = proj_start_date.strftime("%Y-%m-%d")
-    
+    #proj_start_date = st.date_input(
+    #    "Choose Project Start Date:",
+    #    min(inputs['Project Start Date'])
+    #)
+    #proj_start_date = proj_start_date.strftime("%Y-%m-%d")
+      
     # Set End Forecast Date
     forecast_end_date = st.date_input(
         "Choose End Forecast Date:",
@@ -82,28 +108,37 @@ if file is not None:
 
     # Show choosen dates
     st.write("Start forecast:", start_forecast_date)
-    st.write("Project Start Date:", proj_start_date)
+    #st.write("Project Start Date:", proj_start_date)
     st.write("End Forecast Date:", forecast_end_date)
 
     # -----------------------------------------
     # Reserve 1P scenario
-    result_1p= run_res_scenario_dt('1P', qi1p_list, di1p_list, psd_list, well_list, reserve_cat_list, activity_list, di1p_pro_list, project_active_wells, gor_list, bsw_list, forecast_end_date, proj_start_date, dt_list, end_date_list)
+    result_1p= run_res_scenario_dt('1P', qi1p_list, di1p_list, psd_list, well_list, reserve_cat_list, activity_list, di1p_pro_list, project_active_wells, gor_list, wcut_list, forecast_end_date, prosd_list, dt_list, end_date_list, water_mode_list, wct_a_list, wct_b_list, historical_oil_cum_list)
     # Reserve 2P scenario
-    result_2p= run_res_scenario_dt('2P', qi2p_list, di2p_list, psd_list, well_list, reserve_cat_list, activity_list, di2p_pro_list, project_active_wells, gor_list, bsw_list, forecast_end_date, proj_start_date, dt_list, end_date_list)
+    result_2p= run_res_scenario_dt('2P', qi2p_list, di2p_list, psd_list, well_list, reserve_cat_list, activity_list, di2p_pro_list, project_active_wells, gor_list, wcut_list, forecast_end_date, prosd_list, dt_list, end_date_list, water_mode_list, wct_a_list, wct_b_list, historical_oil_cum_list)
     # Reserve 3P scenario
-    result_3p= run_res_scenario_dt('3P', qi3p_list, di3p_list, psd_list, well_list, reserve_cat_list, activity_list, di3p_pro_list, project_active_wells, gor_list, bsw_list, forecast_end_date, proj_start_date, dt_list, end_date_list)
+    result_3p= run_res_scenario_dt('3P', qi3p_list, di3p_list, psd_list, well_list, reserve_cat_list, activity_list, di3p_pro_list, project_active_wells, gor_list, wcut_list, forecast_end_date, prosd_list, dt_list, end_date_list, water_mode_list, wct_a_list, wct_b_list, historical_oil_cum_list)
     # Concatenate reserve scenario
     df = pd.concat([result_1p, result_2p, result_3p], axis=0)
 
-    # Pivot table 1P scenario
-    pv_rc_year_1p=pd.pivot_table(result_1p, values=['oil_volume'], index=['reserve_cat'],
-                   columns=['Year'], aggfunc="sum", sort=False)
+    # Pivot table 1P scenario (guard against empty / missing columns)
+    if result_1p is None or result_1p.empty or 'oil_volume' not in result_1p.columns:
+        pv_rc_year_1p = pd.DataFrame()
+    else:
+        pv_rc_year_1p = pd.pivot_table(result_1p, values=['oil_volume'], index=['reserve_cat'],
+                       columns=['Year'], aggfunc="sum", sort=False)
     # Pivot table 2P scenario
-    pv_rc_year_2p=pd.pivot_table(result_2p, values=['oil_volume'], index=['reserve_cat'],
-                   columns=['Year'], aggfunc="sum", sort=False)
+    if result_2p is None or result_2p.empty or 'oil_volume' not in result_2p.columns:
+        pv_rc_year_2p = pd.DataFrame()
+    else:
+        pv_rc_year_2p = pd.pivot_table(result_2p, values=['oil_volume'], index=['reserve_cat'],
+                       columns=['Year'], aggfunc="sum", sort=False)
     # Pivot table 3P scenario
-    pv_rc_year_3p=pd.pivot_table(result_3p, values=['oil_volume'], index=['reserve_cat'],
-                   columns=['Year'], aggfunc="sum", sort=False)
+    if result_3p is None or result_3p.empty or 'oil_volume' not in result_3p.columns:
+        pv_rc_year_3p = pd.DataFrame()
+    else:
+        pv_rc_year_3p = pd.pivot_table(result_3p, values=['oil_volume'], index=['reserve_cat'],
+                       columns=['Year'], aggfunc="sum", sort=False)
     # Reserve & Resource Summary
     reserve_summary, resource_summary = rr_summary(pv_rc_year_1p, pv_rc_year_2p, pv_rc_year_3p)
     
