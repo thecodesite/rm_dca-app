@@ -68,8 +68,9 @@ def dca_project_dt(qoi, di, prod_start_date, fore_end_date, dip, proj_start_date
     df['Dates']=pd.Series(range_dates_list)
     df['Days_prod']=pd.Series(days_prod).dt.days
     df['Cum_days_prod']=pd.Series(days_prod).dt.days.cumsum().shift().fillna(0)
-    df['Days_month']=pd.Series(days_month).dt.days
-    df['Uptime']=(df['Days_prod']/df['Days_month']).fillna(0)-dt   
+    df['Days_month']=pd.Series(days_month).dt.days 
+    df['Uptime']=(df['Days_prod']/df['Days_month']).fillna(0)
+    df['Downtime'] = dt   
     
     # Compute oil rate (qo)   
     project_active_well = project_active_well
@@ -101,7 +102,7 @@ def dca_project_dt(qoi, di, prod_start_date, fore_end_date, dip, proj_start_date
     
     # Rates Oil, Gas, Water
     #Oil
-    df['oil_rate']=pd.Series(qo_list)*df['Uptime'].to_list()
+    df['oil_rate']=pd.Series(qo_list)*df['Uptime'].to_list()*(1 - df['Downtime'])
     #Gas
     df['gas_rate']=df['oil_rate']*gor/1000
 
