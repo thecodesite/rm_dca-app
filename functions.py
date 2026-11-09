@@ -14,7 +14,7 @@ import pandas as pd
 # The resulting water rate is computed as:
 #   water_rate = oil_rate * (WCT / (1 - WCT))
 # (with WCT capped to [0, 0.999999] to avoid division by zero).
-def dca_project_dt(qoi, di, prod_start_date, fore_end_date, dip, proj_start_date, project_active_well, gor, wcut, dt, water_mode='liquid_rate', wct_a=None, wct_b=None, historical_oil_cum=0):
+def dca_project_dt(qoi, di, prod_start_date, fore_end_date, dip, proj_start_date, project_active_well, gor, wcut, dt, water_mode='liquid_rate', wct_a=None, wct_b=None, historical_oil_cum=0, wct_m=None, wct_b_linear=None):
     '''import calendar
     from datetime import *'''
     #Inputs
@@ -148,13 +148,13 @@ def dca_project_dt(qoi, di, prod_start_date, fore_end_date, dip, proj_start_date
         # Ensure parameters are set
         if wct_m is None:
             wct_m = 0
-        if wct_b is None:
-            wct_b = wcut
+        if wct_b_linear is None:
+            wct_b_linear = wcut
     
         # Compute water cut (WCT) using linear curve based on cumulative oil (Np = historical + future)
         # WCT = m * Np + b
         # Cap WCT in [0, 0.999999] to avoid division by zero
-        wct_dynamic = wct_m * (historical_oil_cum + df['oil_cum']) + wct_b
+        wct_dynamic = wct_m * (historical_oil_cum + df['oil_cum']) + wct_b_linear
         wct_dynamic = np.clip(wct_dynamic, 0, 0.999999)
     
         # Water rate computed from oil rate and the water cut
@@ -177,7 +177,7 @@ def dca_project_dt(qoi, di, prod_start_date, fore_end_date, dip, proj_start_date
     
     # GOR, Wcut
     df['gor']=gor
-    if water_mode == 'wcut_exp':
+    if water_mode in ('wcut_exp', 'wcut_linear'):
         df['wcut'] = wct_dynamic
     else:
         df['wcut'] = wcut
@@ -195,7 +195,7 @@ def dca_project_dt(qoi, di, prod_start_date, fore_end_date, dip, proj_start_date
 def run_res_scenario_dt(
     reserve_scenario, qi_list, di_list, psd_list, well_list, reserve_cat_list, activity_list,
     di_pro_list, project_active_wells, gor_list, wcut_list, forecast_end_date, proj_start_date, dt_list, end_date_list=None,
-    water_mode='liquid_rate', wct_a_list=None, wct_b_list=None, historical_oil_cum_list=None
+    water_mode='liquid_rate', wct_a_list=None, wct_b_list=None, historical_oil_cum_list=None, wct_m_list=None, wct_b_linear_list=None
 ):
     import pandas as pd
     df_list = []
@@ -252,6 +252,16 @@ def run_res_scenario_dt(
             else:
                 wct_b_candidate = wct_b_list
 
+            # Determine per-well linear water cut parameters
+            if isinstance(wct_m_list, (list, tuple, pd.Series)):
+                wct_m_candidate = wct_m_list[idx]
+            else:
+                wct_m_candidate = wct_m_list
+            if isinstance(wct_b_linear_list, (list, tuple, pd.Series)):
+                wct_b_linear_candidate = wct_b_linear_list[idx]
+            else:
+                wct_b_linear_candidate = wct_b_linear_list
+
             # Determine per-well historical oil cumulative
             historical_oil_cum_candidate = 0
             if isinstance(historical_oil_cum_list, (list, tuple, pd.Series)):
@@ -262,7 +272,7 @@ def run_res_scenario_dt(
                 historical_oil_cum_candidate = historical_oil_cum_list or 0
 
             df_well = dca_project_dt(qi, di, psd, well_end_date, di_pro, proj_start_candidate, paw, gor, wcut, dt,
-                                     water_mode=water_mode_candidate, wct_a=wct_a_candidate, wct_b=wct_b_candidate, historical_oil_cum=historical_oil_cum_candidate)
+                                     water_mode=water_mode_candidate, wct_a=wct_a_candidate, wct_b=wct_b_candidate, historical_oil_cum=historical_oil_cum_candidate, wct_m=wct_m_candidate, wct_b_linear=wct_b_linear_candidate)
             df_well = df_well.reset_index()
             df_well['Year'] = pd.to_datetime(df_well['Dates']).dt.year
             df_well['well_name'] = w
