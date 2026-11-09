@@ -113,44 +113,65 @@ def dca_project_dt(qoi, di, prod_start_date, fore_end_date, dip, proj_start_date
     df['gas_cum']=(df['gas_rate']*df['Days_month']).cumsum().shift().fillna(0)
 
     # Water
-    # Three supported water computation modes:
+    # Four supported water computation modes:
     # - 'liquid_rate' (default): keep existing behaviour (based on initial qoi balance)
     # - 'constant_wc': compute water rate as oil_rate * (wcut / (1 - wcut)) (constant water cut)
     # - 'wcut_exp': compute water rate using an exponential water-cut curve WCT = a * exp(b * Np)
     #     where Np is cumulative oil production (historical + future oil_cum)
-
+    # - 'wcut_linear': compute water rate using a linear water-cut curve WCT = m * Np + b
+    #     where Np is cumulative oil production (historical + future oil_cum)
+    
     if water_mode == 'constant_wc':
         # water rate proportional to oil_rate using water cut (wcut)
         # wcut is fraction of water in liquids; water_rate = oil_rate * (wcut / (1 - wcut))
         df['water_rate'] = df['oil_rate'] * (wcut / (1 - wcut))
         # If oil_rate is zero (or negative), ensure water_rate is zero
         df.loc[df['oil_rate'] <= 0, 'water_rate'] = 0
+    
     elif water_mode == 'wcut_exp':
         # Ensure parameters are set
         if wct_a is None:
             wct_a = wcut
         if wct_b is None:
             wct_b = 0
-
+    
         # Compute water cut (WCT) using exponential curve based on cumulative oil (Np = historical + future)
         # Cap WCT in [0, 0.999999] to avoid division by zero
         wct_dynamic = wct_a * np.exp(wct_b * (historical_oil_cum + df['oil_cum']))
         wct_dynamic = np.clip(wct_dynamic, 0, 0.999999)
-
+    
         # Water rate computed from oil rate and the water cut
         df['water_rate'] = df['oil_rate'] * (wct_dynamic / (1 - wct_dynamic))
         df.loc[df['oil_rate'] <= 0, 'water_rate'] = 0
+    
+    elif water_mode == 'wcut_linear':
+        # Ensure parameters are set
+        if wct_m is None:
+            wct_m = 0
+        if wct_b is None:
+            wct_b = wcut
+    
+        # Compute water cut (WCT) using linear curve based on cumulative oil (Np = historical + future)
+        # WCT = m * Np + b
+        # Cap WCT in [0, 0.999999] to avoid division by zero
+        wct_dynamic = wct_m * (historical_oil_cum + df['oil_cum']) + wct_b
+        wct_dynamic = np.clip(wct_dynamic, 0, 0.999999)
+    
+        # Water rate computed from oil rate and the water cut
+        df['water_rate'] = df['oil_rate'] * (wct_dynamic / (1 - wct_dynamic))
+        df.loc[df['oil_rate'] <= 0, 'water_rate'] = 0
+    
     else:
         water_list = []
         for q in qo_list:
-            if q>0:
+            if q > 0:
                 # original behaviour: a balance where initial water + initial oil - current oil
                 w = qoi + qoi * (wcut / (1 - wcut)) - q
             else:
                 w = 0
             water_list.append(w)
         df['water_rate'] = pd.Series(water_list)
-
+    
     #Liquid
     df['liquid_rate']=df['oil_rate']+df['water_rate']
     
