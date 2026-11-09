@@ -42,16 +42,18 @@ Provide a single Excel workbook (.xlsx) containing a flat table (one row per wel
 | `Di_3p` | Conditional* | Numeric (fraction) | e.g., 0.10 | Decline rate for 3P scenario.
 | `GOR` | No | Numeric | scf/STB (e.g., 800) | Gas-to-oil ratio. Used to estimate associated gas volumes.
 | `wcut` | No | Numeric (fraction 0-1) | e.g., 0.2 | Water cut (fraction of water in liquids). Use fraction (20% → 0.2). If your dataset uses percent, convert to fraction.
-| `wct_a` / `wcut_a` | No | Numeric (fraction) | e.g., 0.2 | Parameter `a` for exponential water-cut (WCT = a * exp(b * Np)). `wct_a` is preferred; legacy `wcut_a` also accepted.
-| `wct_b` / `wcut_b` | No | Numeric | e.g., -0.0001 | Parameter `b` for exponential water-cut. `wct_b` is preferred; legacy `wcut_b` also accepted.
-| `Water_Mode` | No | Text | liquid_rate / constant_wc / wcut_exp | Per-well water computation mode. See notes for behaviour.
+| `wct_a` / `wcut_a` | Conditional* | Numeric (fraction) | e.g., 0.2 | Parameter `a` for exponential water-cut (WCT = a * exp(b * Np)). `wct_a` is preferred; legacy `wcut_a` also accepted.
+| `wct_b` / `wcut_b` | Conditional* | Numeric | e.g., -0.0001 | Parameter `b` for exponential water-cut. `wct_b` is preferred; legacy `wcut_b` also accepted. Also used as the linear intercept if a dedicated linear-intercept column is omitted.
+| `wct_m` / `wcut_m` | Conditional* | Numeric | e.g., 0.000001 | Slope `m` for linear water-cut (WCT = m * Np + b). `wct_m` is preferred; legacy `wcut_m` also accepted. Use inverse units of cumulative oil.
+| `wct_b_linear` / `wcut_b_linear` | Conditional* | Numeric (fraction) | e.g., 0.1 | Intercept `b` for linear water-cut. Preferred for `wcut_linear`; `wcut_b_linear` is also accepted. If omitted, `wct_b` / `wcut_b` is used as the intercept.
+| `Water_Mode` | No | Text | liquid_rate / constant_wc / wcut_exp / wcut_linear | Per-well water computation mode. See notes for behaviour.
 | `Project` | No | Boolean / 0/1 | True / False / 1 / 0 | Flag indicating whether the well is active during the project period. If True, a secondary decline (`Di_*_pro`) is applied after `Project Start Date`.
 | `Project Start Date` | No | Date (YYYY-MM-DD) | 2024-01-01 | Optional per-well project start date used to switch to the `Di_*_pro` decline. If missing, global project start is used.
 | `Di_1p_pro` | No | Numeric (fraction) | e.g., 0.20 | Post-project decline rate (1P) applied after `Project Start Date`.
 | `Di_2p_pro` | No | Numeric (fraction) | e.g., 0.18 | Post-project decline rate (2P).
 | `Di_3p_pro` | No | Numeric (fraction) | e.g., 0.15 | Post-project decline rate (3P).
 | `Downtime` | No | Numeric (fraction) | e.g., 0.05 | Fraction of time the well is unavailable; used to reduce `Uptime`.
-| `Historical_Oil_Cum` | No | Numeric | STB (e.g., 120000) | Historical cumulative oil produced for the well. Used when computing exponential water-cut curves.
+| `Historical_Oil_Cum` | No | Numeric | STB (e.g., 120000) | Historical cumulative oil produced for the well. Included in `Np` when computing dynamic water-cut curves.
 | `Comments` | No | Text | Free text | Optional comments; the app coerces this column to string when present.
 | `b` | No | Numeric | -- | (Reserved) present in inputs but not required by core DCA routines; keep if used by custom workflows.
 | `Fluid_Type` | No | Text | Oil / Gas / Condensate | Optional descriptor used in reporting.
@@ -61,17 +63,21 @@ Provide a single Excel workbook (.xlsx) containing a flat table (one row per wel
 
 Notes:
 - Conditional columns: provide both `Qo_*` and `Di_*` for any scenario you want calculated (e.g., `Qo_1p` + `Di_1p` for 1P). Missing scenario values will cause that scenario to be skipped for the well.
+- Water-cut parameter columns are conditional on `Water_Mode`: provide `wct_a` and `wct_b` for `wcut_exp`, or `wct_m` and an intercept (`wct_b_linear` or `wct_b`) for `wcut_linear`.
 - `Project` can be boolean (`True`/`False`) or numeric (`1`/`0`). When `Project` is true for a well and a `Project Start Date` is supplied, the code applies the corresponding `Di_*_pro` decline after that date.
 - Water modes:
-   - `liquid_rate` (default): legacy behaviour based on initial balance.
+   - `wcut_exp` (default): exponential water-cut: WCT = a * exp(b * Np), where `a`=`wct_a` and `b`=`wct_b`. Both parameters must be numeric in the input workbook. `Np` includes `Historical_Oil_Cum` + future cumulative oil.
+   - `wcut_linear`: linear water-cut: WCT = m * Np + b, where `m`=`wct_m` and `b`=`wct_b_linear` (or `wct_b` / `wcut_b` if the linear intercept column is omitted). `Np` includes `Historical_Oil_Cum` + future cumulative oil. The resulting WCT is limited to 0–0.999999 to avoid division by zero.
+   - `liquid_rate`: legacy behaviour based on initial balance.
    - `constant_wc`: water rate computed as oil_rate * (wcut / (1 - wcut)).
-   - `wcut_exp`: exponential water-cut: WCT = a * exp(b * Np), where `a`=`wct_a` (defaults to `wcut` if missing), `b`=`wct_b` (defaults to 0). `Np` includes `Historical_Oil_Cum` + future cumulative oil.
-- `wcut`, `wct_a`, `wct_b` should be fractions (0–1). If your data uses percent, convert to fractions (e.g., 20% → 0.2).
+   - For `wcut_linear`, provide numeric `wct_m` and a numeric intercept in `wct_b_linear` or `wct_b`. The slope uses inverse cumulative-oil units (e.g., 1/STB when `Np` is in STB); the intercept and `wcut` are fractions (0–1).
+- `wcut`, `wct_a`, `wct_b`, and `wct_b_linear` should be fractions (0–1). If your data uses percent, convert to fractions (e.g., 20% → 0.2).
 - `Downtime` is subtracted from uptime; supply as fraction (e.g., 0.05 → 5% downtime).
 - Date formats: accept Excel date types or ISO strings (YYYY-MM-DD). Avoid ambiguous formats (MM/DD/YYYY) to prevent locale-related parsing errors.
 - Units: production in stock tank barrels per day (STB/D) and GOR in standard cubic feet per stock tank barrel (scf/STB). Gas rate is computed as `gas_rate = oil_rate * GOR / 1000` (so GOR in scf/STB produces gas in Mscf/day when divided by 1000).
 - Minimum rate cutoff: the model applies a 50 STB/day cutoff — rates below 50 STB/day are set to zero in forecasts.
 - `wct_a`/`wct_b` vs `wcut_a`/`wcut_b`: the app accepts both new (`wct_*`) and legacy (`wcut_*`) parameter names; prefer `wct_*`.
+- For `wcut_linear`, the app accepts `wct_m` / `wcut_m` for the slope and `wct_b_linear` / `wcut_b_linear` for the intercept. If no linear intercept column is present, `wct_b` / `wcut_b` is used.
 
 ### Running the App
 
