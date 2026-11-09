@@ -45,33 +45,49 @@ if file is not None:
     di3p_pro_list = inputs['Di_3p_pro'].to_list()
     project_active_wells = inputs['Project'].to_list()
     gor_list = inputs['GOR'].to_list()
-    wcut_list = inputs['wcut'].tolist() if 'wcut' in inputs.columns else (inputs['wcut'].tolist() if 'wcut' in inputs.columns else [0]*len(inputs))
+    wcut_list = inputs['wcut'].tolist() if 'wcut' in inputs.columns else [0]*len(inputs)
     b_list = inputs['b'].to_list()
     dt_list = inputs['Downtime'].to_list()
     water_mode_list = inputs['Water_Mode'].tolist() if 'Water_Mode' in inputs.columns else ['wcut_exp']*len(inputs)
     #st.write("Water Mode List:", water_mode_list)  # Debug: mostrar los modos de agua
 
-    # Allow both 'wct_a'/'wct_b' and legacy 'wcut_a'/'wcut_b' column names.
+    # Allow both current and legacy water-cut parameter column names.
     wct_a_raw = inputs['wct_a'] if 'wct_a' in inputs.columns else (inputs['wcut_a'] if 'wcut_a' in inputs.columns else pd.Series([np.nan]*len(inputs)))
     wct_b_raw = inputs['wct_b'] if 'wct_b' in inputs.columns else (inputs['wcut_b'] if 'wcut_b' in inputs.columns else pd.Series([np.nan]*len(inputs)))
+    wct_m_raw = inputs['wct_m'] if 'wct_m' in inputs.columns else (inputs['wcut_m'] if 'wcut_m' in inputs.columns else pd.Series([np.nan]*len(inputs)))
+    wct_b_linear_raw = inputs['wct_b_linear'] if 'wct_b_linear' in inputs.columns else (inputs['wcut_b_linear'] if 'wcut_b_linear' in inputs.columns else wct_b_raw)
+    if wct_b_linear_raw is not wct_b_raw:
+        wct_b_linear_raw = wct_b_linear_raw.combine_first(wct_b_raw)
 
-    # Coerce to numeric and validate
+    # Coerce water-cut parameters to numeric and validate the selected method
     wct_a_numeric = pd.to_numeric(wct_a_raw, errors='coerce')
     wct_b_numeric = pd.to_numeric(wct_b_raw, errors='coerce')
-    invalid_mask = wct_a_numeric.isna() | wct_b_numeric.isna()
-    if invalid_mask.any():
-        invalid_wells = [
-            f"{well}: wct_a={wct_a_raw.iloc[i]!r}, wct_b={wct_b_raw.iloc[i]!r}"
-            for i, well in enumerate(well_list)
-            if invalid_mask.iloc[i]
-        ]
+    wct_m_numeric = pd.to_numeric(wct_m_raw, errors='coerce')
+    wct_b_linear_numeric = pd.to_numeric(wct_b_linear_raw, errors='coerce')
+    invalid_wells = []
+    for i, well in enumerate(well_list):
+        parameters = []
+        if water_mode_list[i] == 'wcut_exp':
+            parameters = [('wct_a', wct_a_raw, wct_a_numeric), ('wct_b', wct_b_raw, wct_b_numeric)]
+        elif water_mode_list[i] == 'wcut_linear':
+            parameters = [('wct_m', wct_m_raw, wct_m_numeric), ('wct_b_linear', wct_b_linear_raw, wct_b_linear_numeric)]
+        else:
+            parameters = [('wct_a', wct_a_raw, wct_a_numeric), ('wct_b', wct_b_raw, wct_b_numeric)]
+        for name, raw_values, numeric_values in parameters:
+            raw_value = raw_values.iloc[i]
+            if pd.isna(numeric_values.iloc[i]):
+                invalid_wells.append(f"{well}: {name}={raw_value!r}")
+
+    if invalid_wells:
         st.error(
-            "Invalid wct_a/wct_b values detected for the following wells (must be numeric):\n" + "\n".join(invalid_wells)
+            "Invalid water-cut parameter values detected for the following wells (must be numeric):\n" + "\n".join(invalid_wells)
         )
         st.stop()
 
-    wct_a_list = wct_a_numeric.tolist()
-    wct_b_list = wct_b_numeric.tolist()
+    wct_a_list = [None if pd.isna(value) else value for value in wct_a_numeric.tolist()]
+    wct_b_list = [None if pd.isna(value) else value for value in wct_b_numeric.tolist()]
+    wct_m_list = [None if pd.isna(value) else value for value in wct_m_numeric.tolist()]
+    wct_b_linear_list = [None if pd.isna(value) else value for value in wct_b_linear_numeric.tolist()]
 
     historical_oil_cum_list = inputs['Historical_Oil_Cum'].tolist() if 'Historical_Oil_Cum' in inputs.columns else [0]*len(inputs)
     rate_limit = 50
@@ -113,11 +129,11 @@ if file is not None:
 
     # -----------------------------------------
     # Reserve 1P scenario
-    result_1p= run_res_scenario_dt('1P', qi1p_list, di1p_list, psd_list, well_list, reserve_cat_list, activity_list, di1p_pro_list, project_active_wells, gor_list, wcut_list, forecast_end_date, prosd_list, dt_list, end_date_list, water_mode_list, wct_a_list, wct_b_list, historical_oil_cum_list)
+    result_1p= run_res_scenario_dt('1P', qi1p_list, di1p_list, psd_list, well_list, reserve_cat_list, activity_list, di1p_pro_list, project_active_wells, gor_list, wcut_list, forecast_end_date, prosd_list, dt_list, end_date_list, water_mode_list, wct_a_list, wct_b_list, historical_oil_cum_list, wct_m_list=wct_m_list, wct_b_linear_list=wct_b_linear_list)
     # Reserve 2P scenario
-    result_2p= run_res_scenario_dt('2P', qi2p_list, di2p_list, psd_list, well_list, reserve_cat_list, activity_list, di2p_pro_list, project_active_wells, gor_list, wcut_list, forecast_end_date, prosd_list, dt_list, end_date_list, water_mode_list, wct_a_list, wct_b_list, historical_oil_cum_list)
+    result_2p= run_res_scenario_dt('2P', qi2p_list, di2p_list, psd_list, well_list, reserve_cat_list, activity_list, di2p_pro_list, project_active_wells, gor_list, wcut_list, forecast_end_date, prosd_list, dt_list, end_date_list, water_mode_list, wct_a_list, wct_b_list, historical_oil_cum_list, wct_m_list=wct_m_list, wct_b_linear_list=wct_b_linear_list)
     # Reserve 3P scenario
-    result_3p= run_res_scenario_dt('3P', qi3p_list, di3p_list, psd_list, well_list, reserve_cat_list, activity_list, di3p_pro_list, project_active_wells, gor_list, wcut_list, forecast_end_date, prosd_list, dt_list, end_date_list, water_mode_list, wct_a_list, wct_b_list, historical_oil_cum_list)
+    result_3p= run_res_scenario_dt('3P', qi3p_list, di3p_list, psd_list, well_list, reserve_cat_list, activity_list, di3p_pro_list, project_active_wells, gor_list, wcut_list, forecast_end_date, prosd_list, dt_list, end_date_list, water_mode_list, wct_a_list, wct_b_list, historical_oil_cum_list, wct_m_list=wct_m_list, wct_b_linear_list=wct_b_linear_list)
     # Concatenate reserve scenario
     df = pd.concat([result_1p, result_2p, result_3p], axis=0)
 
